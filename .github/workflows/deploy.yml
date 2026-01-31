@@ -4,15 +4,6 @@ on:
   push:
     branches: ["main"]
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,24 +19,57 @@ jobs:
       - name: Install dependencies
         run: npm install
       
+      - name: Create missing configs
+        run: |
+          # Create tsconfig.json if missing
+          if [ ! -f "tsconfig.json" ]; then
+            echo '{
+              "compilerOptions": {
+                "target": "ES2020",
+                "useDefineForClassFields": true,
+                "lib": ["ES2020", "DOM", "DOM.Iterable"],
+                "module": "ESNext",
+                "skipLibCheck": true,
+                "moduleResolution": "bundler",
+                "allowImportingTsExtensions": true,
+                "resolveJsonModule": true,
+                "isolatedModules": true,
+                "noEmit": true,
+                "jsx": "react-jsx",
+                "strict": true
+              },
+              "include": ["src"],
+              "references": [{ "path": "./tsconfig.node.json" }]
+            }' > tsconfig.json
+          fi
+          
+          # Create tsconfig.node.json if missing
+          if [ ! -f "tsconfig.node.json" ]; then
+            echo '{
+              "compilerOptions": {
+                "composite": true,
+                "skipLibCheck": true,
+                "module": "ESNext",
+                "moduleResolution": "bundler",
+                "allowSyntheticDefaultImports": true
+              },
+              "include": ["vite.config.ts"]
+            }' > tsconfig.node.json
+          fi
+      
       - name: Build
         run: npm run build
       
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+      - name: Debug build output
+        run: |
+          echo "Build output structure:"
+          ls -la dist/
+          echo "--- index.html content:"
+          head -20 dist/index.html
       
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: './dist'
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
       - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: dist
+          clean: true
